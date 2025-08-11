@@ -132,8 +132,11 @@ if csv_files:
                 df_GM_GR_raw = pd.read_csv(log_file_gasMeas_GR, sep=r"\s+", engine='python', header=0)
                 df_GM_GR_raw = df_GM_GR_raw[["Time", "Ch2:Conce:ppm"]]
                 df_GM_GR_raw.columns = ["t", "CO2"]
+                df_GM_GR_raw["CO2"] = pd.to_numeric(df_GM_GR_raw["CO2"], errors='coerce')  # forcer float, NaN si échec
+                df_GM_GR_raw = df_GM_GR_raw.dropna(subset=["CO2"])  # supprimer lignes invalides
                 df_GM_GR_raw["CO2"] = df_GM_GR_raw["CO2"] / 1e6
                 df_GM_GR_raw["CO2"] = df_GM_GR_raw["CO2"].round(9)
+
             except Exception as e:
                 st.error(f"Erreur lecture fichier gas analyser GR: {e}")
 
@@ -207,3 +210,4 @@ if csv_files:
         file_name="resultats_cfm.zip",
         mime="application/zip"
     )
+
