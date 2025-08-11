@@ -184,4 +184,18 @@ if csv_files_raspi and txt_file_gasMeas_CR is not None and txt_file_gasMeas_GR i
         t_end_tot = df_data_raspi.iloc[-1]["t_tot"]
         
     # extract time window of data series
-    df_GM_CR = extract_g
+    df_GM_CR = extract_gasAnalyser_section(df_GM_CR_raw, t_start_tot, t_end_tot)
+    df_GM_GR = extract_gasAnalyser_section(df_GM_GR_raw, t_start_tot, t_end_tot)
+    
+    # calculate stats
+    CO2_stats_CR = calc_gasAnalyser_stats(df_GM_CR)
+    CO2_stats_GR = calc_gasAnalyser_stats(df_GM_GR)
+    
+    # create output dataframe
+    df_out = pd.DataFrame(index=["mean", "std", "min", "max"])
+    df_out["CR"] = CO2_stats_CR
+    df_out["GR"] = CO2_stats_GR
+    
+    # display
+    st.write("### gas analyser CO2 results")
+    st.write(df_out)
