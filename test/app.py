@@ -87,6 +87,7 @@ def extract_gasAnalyser_section(df_GM_raw, t_start_tot, t_end_tot):
     time_array_str = list(df_GM_raw["t"])
     time_array = np.zeros(len(time_array_str))
     for i,timestr in enumerate(time_array_str):
+        timestr = str(timestr)
         time_array[i] = sum([a*b for a,b in zip([3600,60,1], map(float,timestr.split(':')))])
     df_GM_raw["t_tot"] = time_array
     df_GM = df_GM_raw[(df_GM_raw["t_tot"] > t_start_tot) & (df_GM_raw["t_tot"] < t_end_tot)]
@@ -217,5 +218,6 @@ if csv_files:
         file_name="resultats_cfm.zip",
         mime="application/zip"
     )
+
 
 
