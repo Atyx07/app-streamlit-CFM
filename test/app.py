@@ -53,7 +53,14 @@ def calc_Vdots_out(df_in):
     time_array_str = list(df_in.index)
     time_array = np.zeros(len(time_array_str))
     for i,timestr in enumerate(time_array_str):
-        time_array[i] = sum([a*b for a,b in zip([3600,60,1], map(float,timestr.split(" ")[1].split(':')))])
+        # s'assurer que timestr est bien une chaîne de caractères
+        timestr = str(timestr)
+        # protéger si la structure n'a pas d'espace
+        try:
+            time_part = timestr.split(" ")[1]
+        except IndexError:
+            time_part = timestr  # si pas d'espace, on prend tout
+        time_array[i] = sum([a*b for a,b in zip([3600,60,1], map(float,time_part.split(':')))])
     df_in["t_tot"] = time_array
     time_array = time_array - time_array[0]
     df_in.index = time_array  
@@ -210,4 +217,5 @@ if csv_files:
         file_name="resultats_cfm.zip",
         mime="application/zip"
     )
+
 
