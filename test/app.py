@@ -14,10 +14,10 @@ import zipfile
 # --- Fonctions de calcul ---
 
 def calc_mean_pressures(csv_file):
-    df_raw = pd.read_csv(csv_file, sep=",", header=0, index_col=0, engine='python')
+    df_raw = pd.read_csv(csv_file, sep=",", header=0, index_col=0, engine='python') # read csv
     calib_corr_df = df_raw.loc["calibration correction mbar"]
-    sensor_heights_df = df_raw.loc["sensor height"]
-    df_data_raspi = df_raw.drop(labels=["sensor number","sensor range","sensor height","calibration correction mbar"], axis=0)
+    sensor_heights_df = df_raw.loc["sensor height"] # store height data
+    df_data_raspi = df_raw.drop(labels=["sensor number","sensor range","sensor height","calibration correction mbar"], axis=0) # drop non-pressure rows
 
     p_mean = df_data_raspi.mean().to_frame()
     p_std = df_data_raspi.std().to_frame()
@@ -95,65 +95,61 @@ def calc_gasAnalyser_stats(df_GM):
 
 # --- Interface Streamlit ---
 
-st.header("Traitement multiple CFM avec gas analyser (fichier .log)")
+st.header("Traitement multiple CFM avec gas analyser")
 
 csv_files = st.file_uploader("Importer un ou plusieurs fichiers CSV (RaPi)", accept_multiple_files=True, type=['csv'])
 
-log_file_gasMeas = st.file_uploader("Importer fichier gas analyser (.log)", type=['log', 'txt'])
+log_file_gasMeas_CR = st.file_uploader("Importer fichier gas analyser CR (.log)", type=['log'])
+log_file_gasMeas_GR = st.file_uploader("Importer fichier gas analyser GR (.log)", type=['log'])
 
 timestamps_manual = st.checkbox("Définir manuellement start/end pour gas analyser", value=False)
 
 if csv_files:
-
-    # Préparation du zip en mémoire
+    
+    # Préparation zip en mémoire
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zipf:
         
-        df_GM_raw = None
-        if log_file_gasMeas is not None:
+        # Chargement des gaz analyzers (une fois, hors boucle)
+        df_GM_CR_raw = None
+        df_GM_GR_raw = None
+        
+        if log_file_gasMeas_CR is not None:
             try:
-                # Lecture du fichier log gas analyser
-                # On essaye d'abord sep='\t', sinon sep=' ' (espace multiple)
-                try:
-                    df_GM_raw = pd.read_csv(log_file_gasMeas, sep='\t', engine='python')
-                except Exception:
-                    log_file_gasMeas.seek(0)
-                    df_GM_raw = pd.read_csv(log_file_gasMeas, delim_whitespace=True, engine='python')
-
-                # On vérifie les colonnes : il faut au moins 'Time' et une colonne CO2 (ex: 'CO2', 'Concentration' etc)
-                # Adaptation possible selon ton fichier, ici on cherche une colonne avec "CO2" dans son nom
-                co2_cols = [col for col in df_GM_raw.columns if "CO2" in col.upper()]
-                if len(co2_cols) == 0:
-                    st.warning("Le fichier gas analyser ne contient pas de colonne CO2 reconnue.")
-                    df_GM_raw = None
-                else:
-                    # Renommer colonnes pour uniformiser
-                    df_GM_raw = df_GM_raw.rename(columns={co2_cols[0]: "CO2"})
-                    if "Time" not in df_GM_raw.columns:
-                        st.warning("Le fichier gas analyser ne contient pas de colonne 'Time' reconnue.")
-                        df_GM_raw = None
-                    else:
-                        # Convertir CO2 en fraction (si c’est en %, diviser par 100)
-                        if df_GM_raw["CO2"].max() > 10:
-                            df_GM_raw["CO2"] = df_GM_raw["CO2"] / 100
-                        df_GM_raw["CO2"] = df_GM_raw["CO2"].round(9)
-                        df_GM_raw["t"] = df_GM_raw["Time"].astype(str)
-                        df_GM_raw = df_GM_raw[["t","CO2"]]
+                # On parse les logs avec sep \s+ (espace multiple)
+                df_GM_CR_raw = pd.read_csv(log_file_gasMeas_CR, sep=r"\s+", engine='python', header=0)
+                # Extraction colonnes Time et Ch1:Conce:Vol%
+                df_GM_CR_raw = df_GM_CR_raw[["Time", "Ch1:Conce:Vol%"]]
+                df_GM_CR_raw.columns = ["t", "CO2"]
+                # Convertir % en fraction
+                df_GM_CR_raw["CO2"] = df_GM_CR_raw["CO2"] / 100
+                df_GM_CR_raw["CO2"] = df_GM_CR_raw["CO2"].round(9)
             except Exception as e:
-                st.warning(f"Erreur lecture fichier gas analyser: {e}")
-                df_GM_raw = None
+                st.error(f"Erreur lecture fichier gas analyser CR: {e}")
 
+        if log_file_gasMeas_GR is not None:
+            try:
+                df_GM_GR_raw = pd.read_csv(log_file_gasMeas_GR, sep=r"\s+", engine='python', header=0)
+                df_GM_GR_raw = df_GM_GR_raw[["Time", "Ch2:Conce:ppm"]]
+                df_GM_GR_raw.columns = ["t", "CO2"]
+                df_GM_GR_raw["CO2"] = df_GM_GR_raw["CO2"] / 1e6
+                df_GM_GR_raw["CO2"] = df_GM_GR_raw["CO2"].round(9)
+            except Exception as e:
+                st.error(f"Erreur lecture fichier gas analyser GR: {e}")
+
+        # Traiter chaque fichier CSV RasPi
         for csv_file in csv_files:
             try:
+                # Lire dataframe (en utilisant BytesIO)
                 df_p, df_data_raspi = calc_mean_pressures(BytesIO(csv_file.getvalue()))
                 df_data_raspi, df_Vdot_stats, df_Vdots = calc_Vdots_out(df_data_raspi)
 
-                # Temps pour découpe gas analyser
-                if timestamps_manual and df_GM_raw is not None:
-                    t_start_str = st.text_input(f"Start-time pour {csv_file.name}", value=None, key=f"start_{csv_file.name}")
-                    t_end_str = st.text_input(f"End-time pour {csv_file.name}", value=None, key=f"end_{csv_file.name}")
-                    if (not t_start_str) or (not t_end_str):
-                        st.warning(f"Merci de définir start et end time pour {csv_file.name}")
+                # Déterminer temps pour découpe gas analyser
+                if timestamps_manual and (df_GM_GR_raw is not None or df_GM_CR_raw is not None):
+                    t_start_str = st.text_input(f"Start-time pour {csv_file.name} (format hh:mm:ss)", value="", key=f"start_{csv_file.name}")
+                    t_end_str = st.text_input(f"End-time pour {csv_file.name} (format hh:mm:ss)", value="", key=f"end_{csv_file.name}")
+                    if t_start_str == "" or t_end_str == "":
+                        st.warning(f"Merci de définir start et end time pour le fichier {csv_file.name}")
                         continue
                     t_start_tot = sum([a*b for a,b in zip([3600,60,1], map(float,t_start_str.split(':')))])
                     t_end_tot = sum([a*b for a,b in zip([3600,60,1], map(float,t_end_str.split(':')))])
@@ -161,15 +157,23 @@ if csv_files:
                     t_start_tot = df_data_raspi.iloc[0]["t_tot"]
                     t_end_tot = df_data_raspi.iloc[-1]["t_tot"]
 
-                # Extraction et stats gas analyser si présent
-                if df_GM_raw is not None:
-                    df_GM = extract_gasAnalyser_section(df_GM_raw, t_start_tot, t_end_tot)
-                    GM_stats = calc_gasAnalyser_stats(df_GM)
+                # Extraction et stats gas analyser si disponibles
+                df_GM_CR = None
+                df_GM_GR = None
+                
+                if df_GM_CR_raw is not None:
+                    df_GM_CR = extract_gasAnalyser_section(df_GM_CR_raw, t_start_tot, t_end_tot)
+                    GM_CR_stats = calc_gasAnalyser_stats(df_GM_CR)
                 else:
-                    df_GM = None
-                    GM_stats = None
-
-                # Création Excel en mémoire
+                    GM_CR_stats = None
+                
+                if df_GM_GR_raw is not None:
+                    df_GM_GR = extract_gasAnalyser_section(df_GM_GR_raw, t_start_tot, t_end_tot)
+                    GM_GR_stats = calc_gasAnalyser_stats(df_GM_GR)
+                else:
+                    GM_GR_stats = None
+                
+                # Création Excel dans mémoire
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                     df_p.to_excel(writer, sheet_name="p_mean_press")
@@ -177,12 +181,19 @@ if csv_files:
                     df_Vdot_stats.to_excel(writer, sheet_name="Vdot_stats")
                     df_Vdots.to_excel(writer, sheet_name="Vdots")
 
-                    if df_GM is not None:
-                        df_GM.to_excel(writer, sheet_name="gasAnalyser")
+                    if df_GM_CR is not None:
+                        df_GM_CR.to_excel(writer, sheet_name="gasAnalyser_CR")
+                    if df_GM_GR is not None:
+                        df_GM_GR.to_excel(writer, sheet_name="gasAnalyser_GR")
 
-                    if GM_stats is not None:
-                        df_stats = pd.DataFrame([GM_stats], columns=["mean", "std", "min", "max"], index=["CO2"])
-                        df_stats.to_excel(writer, sheet_name="Stats_gasAnalyser")
+                    # Statistiques gas analyser
+                    if GM_CR_stats is not None:
+                        df_stats_CR = pd.DataFrame([GM_CR_stats], columns=["mean", "std", "min", "max"], index=["CO2_CR"])
+                        df_stats_CR.to_excel(writer, sheet_name="Stats_gasAnalyser_CR")
+
+                    if GM_GR_stats is not None:
+                        df_stats_GR = pd.DataFrame([GM_GR_stats], columns=["mean", "std", "min", "max"], index=["CO2_GR"])
+                        df_stats_GR.to_excel(writer, sheet_name="Stats_gasAnalyser_GR")
 
                 output.seek(0)
                 zipf.writestr(f"results_{csv_file.name.split('.')[0]}.xlsx", output.read())
