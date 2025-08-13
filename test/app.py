@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Tue Feb 18 09:46:34 2025
-
+Edited on Wed Aug 13 09:23:44 2025
 @author: Gregor
 """
 
@@ -13,7 +13,7 @@ import zipfile
 
 
 # =========================
-# Fonctions EXISTANTES (inchangées)
+# Existing functions (unchanged)
 # =========================
 
 def calc_mean_pressures(csv_file):
@@ -111,24 +111,24 @@ def calc_gasAnalyser_stats(df_GM):
 
 
 # =========================
-# Application Streamlit (multi-CSV + ZIP)
+# Streamlit Application (multi-CSV + ZIP)
 # =========================
 
 st.header("CFM data processing")
 
-# --- Uploader MULTI-CSV (plusieurs fichiers) ---
+# --- Uploader MULTI-CSV (multiple files) ---
 csv_files_raspi = st.file_uploader(
     "Import raw data (.csv-export file from RaPi)",
     key="upload_raspi_multi",
     accept_multiple_files=True
 )
 
-# --- Upload des logs (uniques, utilisés pour TOUS les CSV) ---
+# --- logs upload (unique, used for ALL CSV) ---
 txt_file_gasMeas_CR = st.file_uploader("Import raw data from gas analyser (CR)", key="upload_gasAnal_CR")
 txt_file_gasMeas_GR = st.file_uploader("Import raw data from gas analyser (GR)", key="upload_gasAnal_GR")
 timestamps_manual = st.checkbox("Define end - and start-time manually (for gas analyser data extraction)", value=False)
 
-# Lire les logs une seule fois (sinon, en boucle, les pointeurs de fichiers arrivent en fin de fichier)
+# Read logs only once (otherwise, in a loop, file pointers arrive at the end of the file)
 df_GM_CR_raw_global = None
 df_GM_GR_raw_global = None
 
@@ -146,7 +146,7 @@ if txt_file_gasMeas_GR is not None:
     df_GM_GR_raw_global["CO2"] = df_GM_GR_raw_global["CO2"]/(10**6)
     df_GM_GR_raw_global["CO2"] = df_GM_GR_raw_global["CO2"].round(9)
 
-# Si timestamps manuels demandés, on les saisit ici (valeurs par défaut comme dans ton code : lignes 20 et -20 du GR)
+# If manual timestamps are requested, enter them here (default values as in your code: lines 20 and -20 of the GR)
 t_start_tot_manual = None
 t_end_tot_manual = None
 if timestamps_manual and df_GM_GR_raw_global is not None and len(df_GM_GR_raw_global) >= 40:
@@ -155,19 +155,19 @@ if timestamps_manual and df_GM_GR_raw_global is not None and len(df_GM_GR_raw_gl
     t_start_tot_manual = sum([a*b for a,b in zip([3600,60,1], map(float,t_start_str.split(':')))])
     t_end_tot_manual = sum([a*b for a,b in zip([3600,60,1], map(float,t_end_str.split(':')))])
 
-# Conteneurs pour regrouper les fichiers Excel par type
+# Containers to group Excel files by type
 raspi_only_files = []
 extended_files = []
 
-# --- Traitement multi-CSV ---
+# --- Multi-CSV processing ---
 if csv_files_raspi:
     for csv_file_raspi in csv_files_raspi:
 
-        # ========== 1) Calcul "RaPi only" (identique à l’original) ==========
+        # ========== 1) "RaPi only" calculation (identical to the original) ==========
         df_p, df_data_raspi = calc_mean_pressures(csv_file_raspi)
         df_data_raspi, df_Vdot_stats, df_Vdots = calc_Vdots_out(df_data_raspi)
 
-        # Création Excel RaPi only (feuilles identiques)
+        # Excel RaPi creation only (identical sheets)
         output_raspi = BytesIO()
         writer = pd.ExcelWriter(output_raspi, engine = 'xlsxwriter')
         df_p.to_excel(writer, sheet_name="p_mean", float_format="%.5f", startrow=0, index=True)
@@ -177,7 +177,7 @@ if csv_files_raspi:
         writer.close()
         raspi_only_files.append((f'cfm_analysis_{csv_file_raspi.name.split(".")[0]}.xlsx', output_raspi.getvalue()))
 
-        # ========== 2) Calcul "Extended" (identique à l’original) ==========
+        # ========== 2) "Extended" calculation (identical to the original) ==========
         # Cas CR + GR
         if (df_GM_CR_raw_global is not None) and (df_GM_GR_raw_global is not None):
             if timestamps_manual and (t_start_tot_manual is not None) and (t_end_tot_manual is not None):
@@ -208,7 +208,7 @@ if csv_files_raspi:
             writer.close()
             extended_files.append((f'cfm_analysis_extended_{csv_file_raspi.name.split(".")[0]}.xlsx', output_ext.getvalue()))
 
-        # Cas GR seul (identique à l’original)
+        #GR case only (identical to the original)
         elif (df_GM_CR_raw_global is None) and (df_GM_GR_raw_global is not None):
             if timestamps_manual and (t_start_tot_manual is not None) and (t_end_tot_manual is not None):
                 t_start_tot = t_start_tot_manual
@@ -234,14 +234,13 @@ if csv_files_raspi:
             writer.close()
             extended_files.append((f'cfm_analysis_extended_{csv_file_raspi.name.split(".")[0]}.xlsx', output_ext.getvalue()))
 
-        # Si CR seul sans GR -> pas d’extended (comportement inchangé vis-à-vis de ton code)
-
-        # Affichage minimal (optionnel)
+        # If CR alone without GR -> no extended (unchanged behavior with respect to your code)
+        # Minimal display (optional)
         st.dataframe(df_p)
         st.dataframe(df_Vdot_stats)
 
 # ------------------------
-# Téléchargements ZIP
+# ZIP Download
 # ------------------------
 if raspi_only_files:
     zip_buffer_raspi = BytesIO()
@@ -249,7 +248,7 @@ if raspi_only_files:
         for fname, fdata in raspi_only_files:
             zf.writestr(fname, fdata)
     st.download_button(
-        label="Télécharger tous les résultats (RaPi only)",
+        label="Download all the results (RasPi seul)",
         data=zip_buffer_raspi.getvalue(),
         file_name="results_raspi_only.zip",
         mime="application/zip"
@@ -261,8 +260,9 @@ if extended_files:
         for fname, fdata in extended_files:
             zf.writestr(fname, fdata)
     st.download_button(
-        label="Télécharger tous les résultats (Extended)",
+        label="Download all the results (étendu)",
         data=zip_buffer_ext.getvalue(),
         file_name="results_extended.zip",
         mime="application/zip"
     )
+
