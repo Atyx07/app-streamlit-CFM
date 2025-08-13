@@ -116,64 +116,58 @@ def calc_gasAnalyser_stats(df_GM):
 
 st.header("CFM data processing")
 
-# --- Uploader MULTI-CSV ---
+# --- Uploader MULTI-CSV (plusieurs fichiers) ---
 csv_files_raspi = st.file_uploader(
     "Import raw data (.csv-export file from RaPi)",
-    key="upload_raspi",
+    key="upload_raspi_multi",
     accept_multiple_files=True
 )
 
 # --- Upload des logs (uniques, utilisés pour TOUS les CSV) ---
 txt_file_gasMeas_CR = st.file_uploader("Import raw data from gas analyser (CR)", key="upload_gasAnal_CR")
 txt_file_gasMeas_GR = st.file_uploader("Import raw data from gas analyser (GR)", key="upload_gasAnal_GR")
-
 timestamps_manual = st.checkbox("Define end - and start-time manually (for gas analyser data extraction)", value=False)
 
-# Précharger les logs (une seule fois) si fournis
+# Lire les logs une seule fois (sinon, en boucle, les pointeurs de fichiers arrivent en fin de fichier)
 df_GM_CR_raw_global = None
 df_GM_GR_raw_global = None
 
 if txt_file_gasMeas_CR is not None:
-    df_GM_CR_raw_global = pd.read_csv(txt_file_gasMeas_CR, sep="\t", header=0, index_col=None, engine='python')
+    df_GM_CR_raw_global = pd.read_csv(txt_file_gasMeas_CR, sep="\t", header=0, index_col=None, engine='python') # read txt
     df_GM_CR_raw_global = df_GM_CR_raw_global[["Time", "Ch1:Conce:Vol%"]]
     df_GM_CR_raw_global.columns = ["t", "CO2"]
     df_GM_CR_raw_global["CO2"] = df_GM_CR_raw_global["CO2"]/100
     df_GM_CR_raw_global["CO2"] = df_GM_CR_raw_global["CO2"].round(9)
 
 if txt_file_gasMeas_GR is not None:
-    df_GM_GR_raw_global = pd.read_csv(txt_file_gasMeas_GR, sep="\t", header=0, index_col=None, engine='python')
+    df_GM_GR_raw_global = pd.read_csv(txt_file_gasMeas_GR, sep="\t", header=0, index_col=None, engine='python') # read txt
     df_GM_GR_raw_global = df_GM_GR_raw_global[["Time", "Ch2:Conce:ppm"]]
     df_GM_GR_raw_global.columns = ["t", "CO2"]
     df_GM_GR_raw_global["CO2"] = df_GM_GR_raw_global["CO2"]/(10**6)
     df_GM_GR_raw_global["CO2"] = df_GM_GR_raw_global["CO2"].round(9)
 
-# Si timestamps manuels demandés ET qu’on a des données GR (comme dans ton code d’origine)
+# Si timestamps manuels demandés, on les saisit ici (valeurs par défaut comme dans ton code : lignes 20 et -20 du GR)
 t_start_tot_manual = None
 t_end_tot_manual = None
 if timestamps_manual and df_GM_GR_raw_global is not None and len(df_GM_GR_raw_global) >= 40:
-    # valeurs par défaut comme dans ton script (20e et -20e)
-    default_start = df_GM_GR_raw_global.iloc[20]["t"]
-    default_end = df_GM_GR_raw_global.iloc[-20]["t"]
-    t_start_str = st.text_input("start-time (manual, applied to all CSV)", value=default_start, key="start_time_manual")
-    t_end_str = st.text_input("end-time (manual, applied to all CSV)", value=default_end, key="end_time_manual")
+    t_start_str = st.text_input("start-time", value=df_GM_GR_raw_global.iloc[20]["t"])
+    t_end_str = st.text_input("end-time", value=df_GM_GR_raw_global.iloc[-20]["t"])
     t_start_tot_manual = sum([a*b for a,b in zip([3600,60,1], map(float,t_start_str.split(':')))])
     t_end_tot_manual = sum([a*b for a,b in zip([3600,60,1], map(float,t_end_str.split(':')))])
 
-
-# Conteneurs pour accumuler les fichiers Excel (nom, bytes)
+# Conteneurs pour regrouper les fichiers Excel par type
 raspi_only_files = []
 extended_files = []
 
-# --- Boucle sur chaque CSV ---
+# --- Traitement multi-CSV ---
 if csv_files_raspi:
     for csv_file_raspi in csv_files_raspi:
-        # ------------------------
-        # 1) Calcul "RaPi only" (identique à ton code)
-        # ------------------------
+
+        # ========== 1) Calcul "RaPi only" (identique à l’original) ==========
         df_p, df_data_raspi = calc_mean_pressures(csv_file_raspi)
         df_data_raspi, df_Vdot_stats, df_Vdots = calc_Vdots_out(df_data_raspi)
 
-        # Création Excel RaPi only (identique)
+        # Création Excel RaPi only (feuilles identiques)
         output_raspi = BytesIO()
         writer = pd.ExcelWriter(output_raspi, engine = 'xlsxwriter')
         df_p.to_excel(writer, sheet_name="p_mean", float_format="%.5f", startrow=0, index=True)
@@ -183,11 +177,9 @@ if csv_files_raspi:
         writer.close()
         raspi_only_files.append((f'cfm_analysis_{csv_file_raspi.name.split(".")[0]}.xlsx', output_raspi.getvalue()))
 
-        # ------------------------
-        # 2) Calcul "Extended" avec CR+GR
-        # ------------------------
+        # ========== 2) Calcul "Extended" (identique à l’original) ==========
+        # Cas CR + GR
         if (df_GM_CR_raw_global is not None) and (df_GM_GR_raw_global is not None):
-            # Déterminer fenêtre temporelle
             if timestamps_manual and (t_start_tot_manual is not None) and (t_end_tot_manual is not None):
                 t_start_tot = t_start_tot_manual
                 t_end_tot = t_end_tot_manual
@@ -195,18 +187,15 @@ if csv_files_raspi:
                 t_start_tot = df_data_raspi.iloc[0]["t_tot"]
                 t_end_tot = df_data_raspi.iloc[-1]["t_tot"]
 
-            # Extraire sections
             df_GM_CR = extract_gasAnalyser_section(df_GM_CR_raw_global.copy(), t_start_tot, t_end_tot)
             df_GM_GR = extract_gasAnalyser_section(df_GM_GR_raw_global.copy(), t_start_tot, t_end_tot)
 
-            # Stats
             GM_CR_stats = calc_gasAnalyser_stats(df_GM_CR)
             GM_GR_stats = calc_gasAnalyser_stats(df_GM_GR)
             df_GM_stats = pd.DataFrame(index =['CO2_mean / mol/mol', 'CO2_std / mol/mol', 'CO2_min / mol/mol', 'CO2_max / mol/mol'])
             df_GM_stats["CR"] = GM_CR_stats
             df_GM_stats["GR"] = GM_GR_stats
 
-            # Création Excel extended (identique à ton bloc CR+GR)
             output_ext = BytesIO()
             writer = pd.ExcelWriter(output_ext, engine = 'xlsxwriter')
             df_p.to_excel(writer, sheet_name="p_mean", float_format="%.5f", startrow=0, index=True)
@@ -219,11 +208,8 @@ if csv_files_raspi:
             writer.close()
             extended_files.append((f'cfm_analysis_extended_{csv_file_raspi.name.split(".")[0]}.xlsx', output_ext.getvalue()))
 
-        # ------------------------
-        # 3) Calcul "Extended" avec seulement GR (identique à ton bloc d’origine)
-        # ------------------------
+        # Cas GR seul (identique à l’original)
         elif (df_GM_CR_raw_global is None) and (df_GM_GR_raw_global is not None):
-            # Déterminer fenêtre temporelle
             if timestamps_manual and (t_start_tot_manual is not None) and (t_end_tot_manual is not None):
                 t_start_tot = t_start_tot_manual
                 t_end_tot = t_end_tot_manual
@@ -231,15 +217,12 @@ if csv_files_raspi:
                 t_start_tot = df_data_raspi.iloc[0]["t_tot"]
                 t_end_tot = df_data_raspi.iloc[-1]["t_tot"]
 
-            # Extraire section
             df_GM_GR = extract_gasAnalyser_section(df_GM_GR_raw_global.copy(), t_start_tot, t_end_tot)
 
-            # Stats
             GM_GR_stats = calc_gasAnalyser_stats(df_GM_GR)
             df_GM_stats = pd.DataFrame(index =['CO2_mean / mol/mol', 'CO2_std / mol/mol', 'CO2_min / mol/mol', 'CO2_max / mol/mol'])
             df_GM_stats["GR"] = GM_GR_stats
 
-            # Création Excel extended (identique à ton bloc "csv + GR")
             output_ext = BytesIO()
             writer = pd.ExcelWriter(output_ext, engine = 'xlsxwriter')
             df_p.to_excel(writer, sheet_name="p_mean", float_format="%.5f", startrow=0, index=True)
@@ -251,8 +234,11 @@ if csv_files_raspi:
             writer.close()
             extended_files.append((f'cfm_analysis_extended_{csv_file_raspi.name.split(".")[0]}.xlsx', output_ext.getvalue()))
 
-        # Si CR seul sans GR -> pas d’extended (comportement identique à ton code)
-        # else: rien à faire
+        # Si CR seul sans GR -> pas d’extended (comportement inchangé vis-à-vis de ton code)
+
+        # Affichage minimal (optionnel)
+        st.dataframe(df_p)
+        st.dataframe(df_Vdot_stats)
 
 # ------------------------
 # Téléchargements ZIP
