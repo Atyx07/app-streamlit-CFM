@@ -245,11 +245,11 @@ if recap_data:
     for entry in recap_data:
         fname = entry["file"].split(".")[0]
 
-        entry["p_mean"].to_excel(writer, sheet_name=f"{fname}_p_mean")
-        entry["Vdot_stats"].to_excel(writer, sheet_name=f"{fname}_Vdot_stats")
+        entry["p_mean"].to_excel(writer, sheet_name=f"{fname}_p")
+        entry["Vdot_stats"].to_excel(writer, sheet_name=f"{fname}_V")
 
         if "CO2_stats" in entry:
-            entry["CO2_stats"].to_excel(writer, sheet_name=f"{fname}_CO2_stats")
+            entry["CO2_stats"].to_excel(writer, sheet_name=f"{fname}_C")
 
     writer.close()
 
