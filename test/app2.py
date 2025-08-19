@@ -202,7 +202,19 @@ if csv_files_raspi:
 # Téléchargements
 # =========================
 
-# 1) Zip fichiers Extended
+# 1) Zip fichiers
+if raspi_only_files:
+    zip_buffer_raspi = BytesIO()
+    with zipfile.ZipFile(zip_buffer_raspi, "w") as zf:
+        for fname, fdata in raspi_only_files:
+            zf.writestr(fname, fdata)
+    st.download_button(
+        label="⬇ Download all the results (RasPi seul)",
+        data=zip_buffer_raspi.getvalue(),
+        file_name="results_raspi_only.zip",
+        mime="application/zip"
+    )
+
 if extended_files:
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zip_file:
