@@ -3,6 +3,7 @@
 Created on Tue Feb 18 09:46:34 2025
 Edited on Wed Aug 13 09:23:44 2025
 @author: Gregor
+Edited to to process multiple raspi files at once
 """
 
 import numpy as np
@@ -265,4 +266,5 @@ if extended_files:
         file_name="results_extended.zip",
         mime="application/zip"
     )
+
 
