@@ -183,10 +183,10 @@ if csv_files_raspi:
                 nom_fichier = f'cfm_analysis_extended_{csv_file_raspi.name.split(".")[0]}'
 
                 # Moyenne CO2 = B2 (ligne 1, col 0)
-                co2_mean = df_GM_stats.iloc[1,0]
+                co2_mean = df_GM_stats.iloc[0,0]
                 co2_max = df_GM_stats.iloc[3,0]   # B5 (ligne 4, col 0)
-                dp1 = df_p.iloc[32,2]             # C33 (ligne 32, col 2)
-                debit_vol_GR = df_Vdot_stats.iloc[1,1]  # C2 (ligne 1, col 1)
+                dp1 = df_p.iloc[31,1]             # C33 (ligne 32, col 2)
+                debit_vol_GR = df_Vdot_stats.iloc[0,1]  # C2 (ligne 1, col 1)
 
                 recap_rows.append({
                     "Nom du fichier": nom_fichier,
