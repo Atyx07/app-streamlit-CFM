@@ -191,11 +191,11 @@ if csv_files_raspi:
                 debit_vol_GR = df_Vdot_stats.iloc[0,1]  # C2 (ligne 1, col 1)
 
                 recap_rows.append({
-                    "Nom du fichier": nom_fichier,
-                    "Moyenne CO2": co2_mean,
-                    "CO2 max": co2_max,
+                    "File name": nom_fichier,
+                    "CO2 Mean": co2_mean,
+                    "CO2 Max": co2_max,
                     "dp1": dp1,
-                    "Débit volumique GR": debit_vol_GR
+                    "Vdot GR Mean": debit_vol_GR
                 })
 
 # =========================
@@ -210,7 +210,7 @@ if extended_files:
             zip_file.writestr(fname, fdata)
 
     st.download_button(
-        label="⬇️ Télécharger tous les fichiers Extended (zip)",
+        label="⬇ Download all files Extended (zip)",
         data=zip_buffer.getvalue(),
         file_name="extended_files.zip",
         mime="application/zip"
@@ -223,7 +223,7 @@ if recap_rows:
     df_recap.to_excel(recap_output, index=False, sheet_name="Récapitulatif")
     
     st.download_button(
-        label="⬇️ Télécharger le fichier récapitulatif global",
+        label="⬇ Download the global recap file",
         data=recap_output.getvalue(),
         file_name="recapitulatif_global.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
