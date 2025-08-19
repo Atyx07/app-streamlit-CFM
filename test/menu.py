@@ -7,7 +7,7 @@ st.write("Select an app to launch :")
 # Crée deux colonnes pour organiser les apps
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.subheader("App 1 (Gregor)")
+    st.subheader("App 1 (Original)")
     st.write("This app processes unique Raspi files and returns the processed files")
     if st.button("Open App 1"):
         js = "window.open('https://cfmdataprocessingst-dupsgjztrwwvcedwrivyeb.streamlit.app/')"
