@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Streamlit app pour le traitement des données CFM
-Créé par Gregor, modifié pour récapitulatif selon consignes
+Created on Tue Feb 18 09:46:34 2025
+Edited on Wed Aug 13 09:23:44 2025
+@author: Gregor
+Edited to to process multiple raspi files at once and give an Excel recap with CO2 mean, max, dp1, Vdot Mean
 """
 
 import numpy as np
