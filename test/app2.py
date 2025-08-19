@@ -3,15 +3,6 @@ import pandas as pd
 from io import BytesIO
 import zipfile
 
-# ================================
-# Import de tes fonctions existantes
-# ================================
-from ton_module import (
-    calc_mean_pressures,
-    calc_Vdots_out,
-    process_gas_analyser,
-)
-
 st.title("Analyse multi-fichiers CSV avec Gas Analyser")
 
 # Upload de plusieurs CSV en entrée
