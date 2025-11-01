@@ -3,7 +3,8 @@ from rembg import remove
 from PIL import Image, ImageOps
 import io
 import numpy as np
-from streamlit_drawable_canvas import st_canvas
+import platform # Importé pour le débogage
+import streamlit_drawable_canvas # Importé pour le débogage
 
 # --- Configuration de la page ---
 st.set_page_config(
@@ -12,20 +13,46 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- PANNEAU DE DÉBOGAGE (NOUVEAU) ---
+with st.sidebar:
+    st.header("🕵️‍♂️ Panneau de Débogage")
+    st.info(
+        "Ce panneau vérifie si l'environnement est correct "
+        "pour que le crayon de retouche fonctionne."
+    )
+    
+    # Vérifier la version de Python
+    py_version = platform.python_version()
+    st.markdown(f"**Version Python :** `{py_version}`")
+    if py_version.startswith("3.11"):
+        st.success("Version Python OK (devrait être 3.11)")
+    else:
+        st.error("ERREUR: Python doit être 3.11. Votre build a échoué.")
+
+    # Vérifier la version de Streamlit
+    st_version = st.__version__
+    st.markdown(f"**Version Streamlit :** `{st_version}`")
+    if st_version == "1.29.0":
+        st.success("Version Streamlit OK (doit être 1.29.0)")
+    else:
+        st.error("ERREUR: Streamlit doit être 1.29.0. Votre build a échoué.")
+        
+    # Vérifier la version de Canvas
+    try:
+        canvas_version = streamlit_drawable_canvas.__version__
+        st.markdown(f"**Version Canvas :** `{canvas_version}`")
+        st.success("Canvas est installé.")
+    except Exception as e:
+        st.error("ERREUR: Streamlit-Drawable-Canvas n'est PAS installé.")
+
 # --- Initialisation du Session State ---
 if 'original_image' not in st.session_state:
     st.session_state.original_image = None
 if 'processed_image' not in st.session_state:
     st.session_state.processed_image = None
-if 'final_image' not in st.session_state:
-    st.session_state.final_image = None
-if 'upload_key' not in st.session_state:
-    st.session_state.upload_key = 0
-if 'original_bytes' not in st.session_state:
-    st.session_state.original_bytes = None
-if 'file_name' not in st.session_state:
-    st.session_state.file_name = "image.png"
+# ... (le reste du session state) ...
 
+# (Le reste de votre script est identique à la version précédente)
 # --- Fonctions Utiles ---
 def process_image(image_bytes):
     """Lance rembg sur l'image et la stocke dans le session state."""
@@ -51,7 +78,7 @@ st.markdown(
     "2. **Lancez** le détourage IA.\n"
     "3. **Choisissez** votre résultat : 'Sans Retouche' (rapide) ou 'Avec Retouche' (pour corriger)."
 )
-
+st.info("Utilisez la flèche `>` en haut à gauche pour ouvrir le panneau de débogage si l'onglet 'Avec Retouche' ne s'affiche pas.")
 st.divider()
 
 # --- Colonnes principales ---
@@ -64,12 +91,12 @@ with col1:
     uploaded_file = st.file_uploader(
         "Choisissez une image...", 
         type=["png", "jpg", "jpeg", "webp"],
-        key=f"uploader_{st.session_state.upload_key}"
+        key=f"uploader_{st.session_state.get('upload_key', 0)}"
     )
     
     if uploaded_file is not None:
         st.session_state.file_name = uploaded_file.name
-        if uploaded_file.getvalue() != st.session_state.original_bytes:
+        if uploaded_file.getvalue() != st.session_state.get('original_bytes', None):
             st.session_state.original_bytes = uploaded_file.getvalue()
             original_pil = Image.open(io.BytesIO(st.session_state.original_bytes))
             st.session_state.original_image = ImageOps.exif_transpose(original_pil).convert("RGBA")
@@ -99,7 +126,6 @@ with col2:
             
             st.image(st.session_state.processed_image, caption="Arrière-plan supprimé (IA)", use_column_width=True)
             
-            # Bouton de téléchargement pour cet onglet
             st.download_button(
                 label="📥 Télécharger le résultat (PNG)",
                 data=image_to_bytes(st.session_state.processed_image),
@@ -113,15 +139,6 @@ with col2:
             st.subheader("Outil de Retouche Manuelle")
             st.info("🎨 **Peignez en ROUGE** sur l'image pour marquer les zones à restaurer (ex: texte manquant).")
             
-            # --- AVERTISSEMENT POUR LE BUG DE LA TOILE BLANCHE ---
-            st.warning(
-                "**⚠️ Problème d'affichage ?**\n"
-                "Si vous voyez une **toile blanche** ci-dessous (sans votre image), "
-                "c'est que l'application n'est pas installée correctement sur le Cloud. "
-                "Assurez-vous que vos fichiers `requirements.txt` et `.python-version` "
-                "sont **exactement** comme indiqué dans mes instructions."
-            )
-
             # Calcul de la taille du canvas
             width_orig = st.session_state.processed_image.width
             height_orig = st.session_state.processed_image.height
@@ -150,7 +167,6 @@ with col2:
             if st.button("Appliquer la retouche", use_container_width=True):
                 if canvas_result.image_data is not None:
                     with st.spinner("Application de la retouche..."):
-                        # ... (Logique de fusion des masques) ...
                         mask_drawing_np_resized = canvas_result.image_data[:, :, 3] > 0
                         mask_restore_np_resized = (mask_drawing_np_resized * 255).astype('uint8')
                         mask_restore_pil = Image.fromarray(mask_restore_np_resized, 'L')
@@ -177,7 +193,3 @@ with col2:
                     mime="image/png",
                     use_container_width=True
                 )
-
-# --- Pied de page ---
-st.divider()
-st.markdown("Créé avec [Streamlit](https://streamlit.io/), [rembg](https://github.com/danielgatis/rembg) & [Streamlit-Drawable-Canvas](https://github.com/andfanilo/streamlit-drawable-canvas).")
