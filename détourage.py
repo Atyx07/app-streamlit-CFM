@@ -1,128 +1,158 @@
 import streamlit as st
-from rembg import remove  # Bibliothèque principale pour le détourage
-from PIL import Image     # Pour manipuler les images
-import io                 # Pour gérer les bytes (données binaires)
+from rembg import remove
+from PIL import Image
+import io
+import numpy as np
+from streamlit_drawable_canvas import st_canvas
 
 # --- Configuration de la page ---
 st.set_page_config(
-    page_title="Suppresseur d'arrière-plan",
-    page_icon="✂️",
+    page_title="Éditeur d'arrière-plan",
+    page_icon="🎨",
     layout="wide"
 )
 
-# --- Barre Latérale (Sidebar) pour les réglages ---
-st.sidebar.header("⚙️ Réglages de précision")
-st.sidebar.info(
-    "Activez l'affinage pour un meilleur traitement des détails "
-    "(comme les cheveux), mais le traitement sera plus lent."
-)
+# --- Initialisation du Session State ---
+# C'est crucial pour garder les images en mémoire entre les interactions
+if 'original_image' not in st.session_state:
+    st.session_state.original_image = None
+if 'processed_image' not in st.session_state:
+    st.session_state.processed_image = None
+if 'final_image' not in st.session_state:
+    st.session_state.final_image = None
+if 'upload_key' not in st.session_state:
+    st.session_state.upload_key = 0  # Pour forcer le reset si on change d'image
 
-# Case à cocher pour activer l'Alpha Matting
-use_alpha_matting = st.sidebar.checkbox("Activer l'affinage des bords (Alpha Matting)", value=True)
+# --- Fonctions Utiles ---
+def process_image(image_bytes):
+    """Lance rembg sur l'image et la stocke dans le session state."""
+    with st.spinner("Magie en cours... L'IA analyse l'image..."):
+        try:
+            output_bytes = remove(image_bytes)
+            # Stocker le résultat RGBA (avec transparence)
+            st.session_state.processed_image = Image.open(io.BytesIO(output_bytes)).convert("RGBA")
+            st.session_state.final_image = None # Réinitialise l'image finale
+        except Exception as e:
+            st.error(f"Erreur lors du traitement automatique : {e}")
+            st.session_state.processed_image = None
 
-# Valeurs par défaut
-fg_threshold = 240  # Seuil de premier plan (défaut rembg)
-bg_threshold = 10   # Seuil d'arrière-plan (défaut rembg)
-
-if use_alpha_matting:
-    st.sidebar.subheader("Réglages de l'affinage :")
-    
-    # NOUVEAU CURSEUR : Seuil de Premier Plan
-    fg_threshold = st.sidebar.slider(
-        "Tolérance du Premier Plan (Sujet) :",
-        min_value=0,
-        max_value=255,
-        value=240,
-        help=(
-            "Plus cette valeur est BASSE, plus l'IA inclura de pixels 'incertains' "
-            "(comme le texte ou les cheveux fins) dans le sujet principal. "
-            "Essayez de BAISSER cette valeur pour garder le texte."
-        )
-    )
-    
-    # CURSEUR EXISTANT : Seuil d'Arrière-plan
-    bg_threshold = st.sidebar.slider(
-        "Sensibilité de l'Arrière-Plan :",
-        min_value=0,
-        max_value=255,
-        value=10,
-        help=(
-            "Plus cette valeur est HAUTE, plus l'IA sera agressive pour supprimer "
-            "les pixels de l'arrière-plan. (Défaut: 10)"
-        )
-    )
-    st.sidebar.markdown(
-        "**Astuce :** Pour garder votre texte, essayez de **baisser** la 'Tolérance du Premier Plan' (ex: à 150) "
-        "et de garder la 'Sensibilité de l'Arrière-Plan' basse (ex: à 10)."
-    )
+def image_to_bytes(image):
+    """Convertit une image PIL en bytes pour le téléchargement."""
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    return buf.getvalue()
 
 # --- Interface Principale ---
-st.title("✂️ Suppresseur d'arrière-plan d'image")
+st.title("🎨 Éditeur d'arrière-plan avec Crayon de Retouche")
 st.markdown(
-    "Téléchargez une image et l'IA enlèvera l'arrière-plan automatiquement."
+    "**Comment ça marche ?**\n"
+    "1. **Chargez** votre image.\n"
+    "2. **Traitez-la** avec l'IA. Le résultat (imparfait) s'affichera à droite.\n"
+    "3. **Dessinez** sur l'image de droite avec le **crayon blanc** pour restaurer les zones effacées par erreur (comme votre texte).\n"
+    "4. **Téléchargez** le résultat final."
 )
 
-if use_alpha_matting:
-    st.warning("Mode 'Affinage des bords' activé. Le traitement sera plus lent mais plus précis.")
-else:
-    st.info("Mode rapide activé. Pour des réglages fins (cheveux, texte), activez l'affinage dans les réglages à gauche.")
+st.divider()
 
-
-# --- Colonnes pour l'affichage ---
+# --- Colonnes principales ---
 col1, col2 = st.columns(2)
 
-# --- Colonne 1 : Téléchargement et Image Originale ---
+# --- Colonne 1 : Originale et Contrôles ---
 with col1:
-    st.header("1. Votre Image")
+    st.header("Étape 1 : Charger et Traiter")
     
-    uploaded_file = st.file_uploader("Choisissez une image...", type=["png", "jpg", "jpeg", "webp"])
+    # Le 'key' est important pour détecter les changements de fichier
+    uploaded_file = st.file_uploader(
+        "Choisissez une image...", 
+        type=["png", "jpg", "jpeg", "webp"],
+        key=f"uploader_{st.session_state.upload_key}"
+    )
     
     if uploaded_file is not None:
-        input_bytes = uploaded_file.getvalue()
-        input_image = Image.open(io.BytesIO(input_bytes))
+        # Si c'est une nouvelle image, on réinitialise tout
+        if st.session_state.original_image is None or uploaded_file.getvalue() != st.session_state.get('original_bytes', b''):
+            st.session_state.original_bytes = uploaded_file.getvalue()
+            st.session_state.original_image = Image.open(io.BytesIO(st.session_state.original_bytes)).convert("RGBA")
+            # Réinitialiser les images traitées
+            st.session_state.processed_image = None
+            st.session_state.final_image = None
+            
+        st.image(st.session_state.original_image, caption="Image Originale", use_column_width=True)
         
-        st.image(input_image, caption="Image Originale", use_column_width=True)
+        # Bouton pour lancer le traitement
+        if st.button("🚀 Lancer le détourage IA", use_container_width=True):
+            process_image(st.session_state.original_bytes)
 
-# --- Colonne 2 : Résultat et Téléchargement ---
+# --- Colonne 2 : Résultat et Édition ---
 with col2:
-    st.header("2. Résultat")
+    st.header("Étape 2 : Retoucher et Télécharger")
     
-    if uploaded_file is not None:
-        spinner_message = ("Magie en cours... L'IA analyse l'image..." 
-                           if not use_alpha_matting 
-                           else "Affinage en cours... (plus lent)...")
-        
-        with st.spinner(spinner_message):
-            try:
-                # 
-                # --- MODIFICATION CLÉ ---
-                # On passe les DEUX seuils à la fonction remove()
-                #
-                output_bytes = remove(
-                    input_bytes,
-                    alpha_matting=use_alpha_matting,
-                    alpha_matting_foreground_threshold=fg_threshold, # Valeur du NOUVEAU curseur
-                    alpha_matting_background_threshold=bg_threshold  # Valeur du curseur existant
-                )
-                
-                output_image = Image.open(io.BytesIO(output_bytes))
-                
-                st.image(output_image, caption="Arrière-plan supprimé", use_column_width=True)
-                
-                file_name = f"{uploaded_file.name.split('.')[0]}_no_bg.png"
-                
-                st.download_button(
-                    label="📥 Télécharger le résultat (PNG)",
-                    data=output_bytes,
-                    file_name=file_name,
-                    mime="image/png"
-                )
-            except Exception as e:
-                st.error(f"Une erreur est survenue lors du traitement : {e}")
-                
+    if st.session_state.processed_image is None:
+        st.info("Le résultat du détourage et l'outil de retouche apparaîtront ici.")
     else:
-        st.info("Veuillez télécharger une image dans le panneau de gauche pour voir le résultat ici.")
+        # Configuration du crayon
+        st.markdown("Utilisez le **crayon (blanc)** pour **restaurer** les zones manquantes.")
+        
+        # On utilise la taille de l'image traitée pour le canvas
+        width = st.session_state.processed_image.width
+        height = st.session_state.processed_image.height
+        
+        # Limiter la taille max pour l'affichage (garder le ratio)
+        max_width = 700
+        if width > max_width:
+            ratio = max_width / width
+            width = max_width
+            height = int(height * ratio)
+
+        canvas_result = st_canvas(
+            fill_color="rgba(255, 255, 255, 1)",  # Crayon blanc
+            stroke_width=20,                      # Taille du crayon
+            stroke_color="#FFFFFF",               # Couleur du crayon
+            background_image=st.session_state.processed_image,
+            update_streamlit=True,
+            height=height,
+            width=width,
+            drawing_mode="freedraw",
+            key="canvas",
+        )
+
+        # --- Logique de fusion ---
+        if canvas_result.image_data is not None:
+            # 1. Le dessin de l'utilisateur (le "masque de restauration")
+            # Le canvas_result.image_data contient le fond + le dessin.
+            # Le canal Alpha (indice 3) du dessin est > 0 là où l'utilisateur a dessiné.
+            mask_drawing_np = canvas_result.image_data[:, :, 3] > 0
+            # Convertir en masque 0-255
+            mask_restore_np = (mask_drawing_np * 255).astype('uint8')
+            
+            # 2. Le masque alpha original de rembg
+            alpha_rembg_np = np.array(st.session_state.processed_image.split()[3])
+            
+            # 3. On fusionne les deux masques
+            # On prend le maximum : si c'était visible dans rembg OU si l'utilisateur l'a dessiné
+            final_alpha_np = np.maximum(alpha_rembg_np, mask_restore_np)
+            
+            # 4. On crée la nouvelle image finale
+            final_image = st.session_state.original_image.copy()
+            # On applique le nouveau masque alpha combiné
+            final_image.putalpha(Image.fromarray(final_alpha_np, 'L'))
+            
+            # On stocke l'image finale pour le téléchargement
+            st.session_state.final_image = final_image
+            
+            st.divider()
+            st.subheader("Aperçu Final")
+            st.image(st.session_state.final_image, caption="Résultat retouché", use_column_width=True)
+
+            # Bouton de téléchargement
+            st.download_button(
+                label="📥 Télécharger le résultat final (PNG)",
+                data=image_to_bytes(st.session_state.final_image),
+                file_name=f"{uploaded_file.name.split('.')[0]}_retouched.png",
+                mime="image/png",
+                use_container_width=True
+            )
 
 # --- Pied de page ---
-st.markdown("---")
-st.markdown("Créé avec [Streamlit](https://streamlit.io/) & [rembg](https://github.com/danielgatis/rembg).")
+st.divider()
+st.markdown("Créé avec [Streamlit](https://streamlit.io/), [rembg](https://github.com/danielgatis/rembg) & [Streamlit-Drawable-Canvas](https://github.com/andfanilo/streamlit-drawable-canvas).")
