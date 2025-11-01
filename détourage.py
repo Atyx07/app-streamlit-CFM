@@ -23,6 +23,8 @@ if 'upload_key' not in st.session_state:
     st.session_state.upload_key = 0
 if 'original_bytes' not in st.session_state:
     st.session_state.original_bytes = None
+if 'file_name' not in st.session_state:
+    st.session_state.file_name = "image.png"
 
 # --- Fonctions Utiles ---
 def process_image(image_bytes):
@@ -43,13 +45,11 @@ def image_to_bytes(image):
     return buf.getvalue()
 
 # --- Interface Principale ---
-st.title("🎨 Éditeur d'arrière-plan avec Crayon de Retouche")
+st.title("✂️🎨 Éditeur d'arrière-plan IA (avec/sans retouche)")
 st.markdown(
-    "**Comment ça marche ?**\n"
     "1. **Chargez** votre image.\n"
-    "2. **Traitez-la** avec l'IA. Le résultat (parfois imparfait) s'affichera à droite.\n"
-    "3. **Peignez en ROUGE** les zones à restaurer (comme du texte manquant).\n"
-    "4. Cliquez sur **'Appliquer la retouche'** pour voir le résultat final."
+    "2. **Lancez** le détourage IA.\n"
+    "3. **Choisissez** votre résultat : 'Sans Retouche' (rapide) ou 'Avec Retouche' (pour corriger)."
 )
 
 st.divider()
@@ -68,6 +68,7 @@ with col1:
     )
     
     if uploaded_file is not None:
+        st.session_state.file_name = uploaded_file.name
         if uploaded_file.getvalue() != st.session_state.original_bytes:
             st.session_state.original_bytes = uploaded_file.getvalue()
             original_pil = Image.open(io.BytesIO(st.session_state.original_bytes))
@@ -79,88 +80,103 @@ with col1:
         
         if st.button("🚀 Lancer le détourage IA", use_container_width=True):
             process_image(st.session_state.original_bytes)
-            st.session_state.final_image = None # Réinitialiser l'aperçu final
+            st.session_state.final_image = None 
 
-# --- Colonne 2 : Résultat et Édition ---
+# --- Colonne 2 : Résultat (avec Onglets) ---
 with col2:
-    st.header("Étape 2 : Retoucher")
+    st.header("Étape 2 : Résultat")
     
     if st.session_state.processed_image is None:
-        st.info("Le résultat du détourage et l'outil de retouche apparaîtront ici.")
+        st.info("Le résultat du détourage apparaîtra ici.")
     else:
-        st.info("🎨 **Peignez en ROUGE** sur l'image pour marquer les zones à restaurer.")
+        # --- CRÉATION DES ONGLETS ---
+        tab1, tab2 = st.tabs(["Résultat (Sans Retouche)", "Résultat (Avec Retouche)"])
 
-        # On utilise la taille de l'image traitée pour le canvas
-        width_orig = st.session_state.processed_image.width
-        height_orig = st.session_state.processed_image.height
-        
-        max_width = 700
-        if width_orig > max_width:
-            ratio = max_width / width_orig
-            width_canvas = max_width
-            height_canvas = int(height_orig * ratio)
-        else:
-            width_canvas = width_orig
-            height_canvas = height_orig
-
-        canvas_result = st_canvas(
-            fill_color="rgba(255, 0, 0, 0.3)",  # Couleur de remplissage (pour formes)
-            stroke_width=20,                    # Taille du crayon
-            stroke_color="rgba(255, 0, 0, 0.7)",# Crayon ROUGE semi-transparent
-            background_image=st.session_state.processed_image,
-            update_streamlit=False,             # IMPORTANT: On n'actualise pas en direct
-            height=height_canvas,
-            width=width_canvas,
-            drawing_mode="freedraw",
-            key="canvas",
-        )
-
-        # Bouton d'application
-        if st.button("Appliquer la retouche", use_container_width=True):
-            if canvas_result.image_data is not None:
-                with st.spinner("Application de la retouche..."):
-                    # 1. Le dessin de l'utilisateur (masque rouge)
-                    mask_drawing_np_resized = canvas_result.image_data[:, :, 3] > 0
-                    mask_restore_np_resized = (mask_drawing_np_resized * 255).astype('uint8')
-                    
-                    mask_restore_pil = Image.fromarray(mask_restore_np_resized, 'L')
-                    
-                    # 2. Taille de l'image originale traitée
-                    original_size = st.session_state.processed_image.size
-                    
-                    # 3. Redimensionner le masque à la taille originale
-                    mask_restore_pil_original_size = mask_restore_pil.resize(original_size, Image.Resampling.NEAREST)
-                    mask_restore_np = np.array(mask_restore_pil_original_size)
-                    
-                    # 4. Masque alpha original de rembg
-                    alpha_rembg_np = np.array(st.session_state.processed_image.split()[3])
-                    
-                    # 5. Fusionner les masques
-                    final_alpha_np = np.maximum(alpha_rembg_np, mask_restore_np)
-                    
-                    # 6. Créer l'image finale
-                    final_image = st.session_state.original_image.copy()
-                    final_image.putalpha(Image.fromarray(final_alpha_np, 'L'))
-                    
-                    # 7. Stocker pour affichage et téléchargement
-                    st.session_state.final_image = final_image
-            else:
-                st.warning("Vous n'avez rien dessiné.")
-        
-        # --- Affichage du résultat final (s'il existe) ---
-        if st.session_state.final_image is not None:
-            st.divider()
-            st.subheader("Aperçu Final")
-            st.image(st.session_state.final_image, caption="Résultat retouché", use_column_width=True)
-
-            # Bouton de téléchargement
+        # --- Onglet 1 : Version Simple (v2) ---
+        with tab1:
+            st.subheader("Résultat IA simple")
+            st.info("Voici le résultat brut de l'IA. Rapide et simple.")
+            
+            st.image(st.session_state.processed_image, caption="Arrière-plan supprimé (IA)", use_column_width=True)
+            
+            # Bouton de téléchargement pour cet onglet
             st.download_button(
-                label="📥 Télécharger le résultat final (PNG)",
-                data=image_to_bytes(st.session_state.final_image),
-                file_name=f"{uploaded_file.name.split('.')[0]}_retouched.png",
+                label="📥 Télécharger le résultat (PNG)",
+                data=image_to_bytes(st.session_state.processed_image),
+                file_name=f"{st.session_state.file_name.split('.')[0]}_ia.png",
                 mime="image/png",
                 use_container_width=True
             )
+
+        # --- Onglet 2 : Version Retouche (v5) ---
+        with tab2:
+            st.subheader("Outil de Retouche Manuelle")
+            st.info("🎨 **Peignez en ROUGE** sur l'image pour marquer les zones à restaurer (ex: texte manquant).")
+            
+            # --- AVERTISSEMENT POUR LE BUG DE LA TOILE BLANCHE ---
+            st.warning(
+                "**⚠️ Problème d'affichage ?**\n"
+                "Si vous voyez une **toile blanche** ci-dessous (sans votre image), "
+                "c'est que l'application n'est pas installée correctement sur le Cloud. "
+                "Assurez-vous que vos fichiers `requirements.txt` et `.python-version` "
+                "sont **exactement** comme indiqué dans mes instructions."
+            )
+
+            # Calcul de la taille du canvas
+            width_orig = st.session_state.processed_image.width
+            height_orig = st.session_state.processed_image.height
+            max_width = 700
+            if width_orig > max_width:
+                ratio = max_width / width_orig
+                width_canvas = max_width
+                height_canvas = int(height_orig * ratio)
+            else:
+                width_canvas = width_orig
+                height_canvas = height_orig
+
+            canvas_result = st_canvas(
+                fill_color="rgba(255, 0, 0, 0.3)",
+                stroke_width=20,
+                stroke_color="rgba(255, 0, 0, 0.7)", # Crayon ROUGE
+                background_image=st.session_state.processed_image, # L'image de l'IA va ici
+                update_streamlit=False,
+                height=height_canvas,
+                width=width_canvas,
+                drawing_mode="freedraw",
+                key="canvas",
+            )
+
+            # Bouton d'application
+            if st.button("Appliquer la retouche", use_container_width=True):
+                if canvas_result.image_data is not None:
+                    with st.spinner("Application de la retouche..."):
+                        # ... (Logique de fusion des masques) ...
+                        mask_drawing_np_resized = canvas_result.image_data[:, :, 3] > 0
+                        mask_restore_np_resized = (mask_drawing_np_resized * 255).astype('uint8')
+                        mask_restore_pil = Image.fromarray(mask_restore_np_resized, 'L')
+                        original_size = st.session_state.processed_image.size
+                        mask_restore_pil_original_size = mask_restore_pil.resize(original_size, Image.Resampling.NEAREST)
+                        mask_restore_np = np.array(mask_restore_pil_original_size)
+                        alpha_rembg_np = np.array(st.session_state.processed_image.split()[3])
+                        final_alpha_np = np.maximum(alpha_rembg_np, mask_restore_np)
+                        final_image = st.session_state.original_image.copy()
+                        final_image.putalpha(Image.fromarray(final_alpha_np, 'L'))
+                        st.session_state.final_image = final_image
+                else:
+                    st.warning("Vous n'avez rien dessiné.")
+            
+            if st.session_state.final_image is not None:
+                st.divider()
+                st.subheader("Aperçu Final Retouché")
+                st.image(st.session_state.final_image, caption="Résultat retouché", use_column_width=True)
+
+                st.download_button(
+                    label="📥 Télécharger le résultat final (PNG)",
+                    data=image_to_bytes(st.session_state.final_image),
+                    file_name=f"{st.session_state.file_name.split('.')[0]}_retouched.png",
+                    mime="image/png",
+                    use_container_width=True
+                )
 
 # --- Pied de page ---
 st.divider()
