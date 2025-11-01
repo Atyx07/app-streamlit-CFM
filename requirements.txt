@@ -1,4 +1,5 @@
 streamlit
 rembg
 pillow
-onnxruntime
+streamlit-drawable-canvas
+numpy
