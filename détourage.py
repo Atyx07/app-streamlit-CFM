@@ -18,29 +18,43 @@ st.sidebar.info(
 )
 
 # Case à cocher pour activer l'Alpha Matting
-use_alpha_matting = st.sidebar.checkbox("Activer l'affinage des bords (Alpha Matting)", value=False)
+use_alpha_matting = st.sidebar.checkbox("Activer l'affinage des bords (Alpha Matting)", value=True)
 
-# Valeurs par défaut (utilisées si la case n'est pas cochée)
+# Valeurs par défaut
 fg_threshold = 240  # Seuil de premier plan (défaut rembg)
 bg_threshold = 10   # Seuil d'arrière-plan (défaut rembg)
 
 if use_alpha_matting:
-    st.sidebar.subheader("Curseur de sensibilité")
+    st.sidebar.subheader("Réglages de l'affinage :")
     
-    # Le curseur que vous avez demandé !
-    bg_threshold = st.sidebar.slider(
-        "Sensibilité de l'effacement :",
+    # NOUVEAU CURSEUR : Seuil de Premier Plan
+    fg_threshold = st.sidebar.slider(
+        "Tolérance du Premier Plan (Sujet) :",
         min_value=0,
-        max_value=50,  # Une plage de 0 à 50 est suffisante (255 est le max absolu)
-        value=10,      # La valeur par défaut de la bibliothèque
+        max_value=255,
+        value=240,
         help=(
-            "Contrôle l'agressivité de la suppression des pixels de bordure. "
-            "Plus la valeur est élevée, plus l'IA effacera les 'franges' "
-            "semi-transparentes autour du sujet. (Défaut: 10)"
+            "Plus cette valeur est BASSE, plus l'IA inclura de pixels 'incertains' "
+            "(comme le texte ou les cheveux fins) dans le sujet principal. "
+            "Essayez de BAISSER cette valeur pour garder le texte."
         )
     )
-    # Nous pourrions aussi ajouter un slider pour 'fg_threshold', 
-    # mais gardons simple pour l'instant.
+    
+    # CURSEUR EXISTANT : Seuil d'Arrière-plan
+    bg_threshold = st.sidebar.slider(
+        "Sensibilité de l'Arrière-Plan :",
+        min_value=0,
+        max_value=255,
+        value=10,
+        help=(
+            "Plus cette valeur est HAUTE, plus l'IA sera agressive pour supprimer "
+            "les pixels de l'arrière-plan. (Défaut: 10)"
+        )
+    )
+    st.sidebar.markdown(
+        "**Astuce :** Pour garder votre texte, essayez de **baisser** la 'Tolérance du Premier Plan' (ex: à 150) "
+        "et de garder la 'Sensibilité de l'Arrière-Plan' basse (ex: à 10)."
+    )
 
 # --- Interface Principale ---
 st.title("✂️ Suppresseur d'arrière-plan d'image")
@@ -49,9 +63,9 @@ st.markdown(
 )
 
 if use_alpha_matting:
-    st.warning("Affinage des bords (Alpha Matting) activé. Le traitement sera plus lent.")
+    st.warning("Mode 'Affinage des bords' activé. Le traitement sera plus lent mais plus précis.")
 else:
-    st.info("Mode rapide activé. Pour des bords plus précis (cheveux, fourrure), activez l'affinage dans les réglages à gauche.")
+    st.info("Mode rapide activé. Pour des réglages fins (cheveux, texte), activez l'affinage dans les réglages à gauche.")
 
 
 # --- Colonnes pour l'affichage ---
@@ -74,7 +88,6 @@ with col2:
     st.header("2. Résultat")
     
     if uploaded_file is not None:
-        # Si un fichier a été téléchargé, on lance le traitement
         spinner_message = ("Magie en cours... L'IA analyse l'image..." 
                            if not use_alpha_matting 
                            else "Affinage en cours... (plus lent)...")
@@ -83,13 +96,13 @@ with col2:
             try:
                 # 
                 # --- MODIFICATION CLÉ ---
-                # On passe les nouveaux paramètres à la fonction remove()
+                # On passe les DEUX seuils à la fonction remove()
                 #
                 output_bytes = remove(
                     input_bytes,
-                    alpha_matting=use_alpha_matting,  # True ou False selon la checkbox
-                    alpha_matting_foreground_threshold=fg_threshold, # Valeur fixe (240)
-                    alpha_matting_background_threshold=bg_threshold  # Valeur du curseur (10 par défaut)
+                    alpha_matting=use_alpha_matting,
+                    alpha_matting_foreground_threshold=fg_threshold, # Valeur du NOUVEAU curseur
+                    alpha_matting_background_threshold=bg_threshold  # Valeur du curseur existant
                 )
                 
                 output_image = Image.open(io.BytesIO(output_bytes))
