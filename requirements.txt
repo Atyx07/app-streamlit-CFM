@@ -2,3 +2,4 @@ streamlit
 rembg
 pillow
 numpy
+streamlit-image-coordinates
